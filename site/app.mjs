@@ -26,6 +26,9 @@ function previewMarket() {
   text("previewMarket", market ? market.coin : "—");
   text("previewCollateral", market ? market.collateralName : "—");
   text("previewAsset", market ? market.assetId : "—");
+  text("sourcePreviewMarket", market ? market.coin : "—");
+  text("sourcePreviewCollateral", market ? market.collateralName : "—");
+  text("sourcePreviewAsset", market ? market.assetId : "—");
   $("previewAsset").closest(".market-facts").querySelector(".hip-note").textContent = market?.dex === "native" ? "(NATIVE)" : "(HIP-3)";
 }
 function currentCase() { return document.querySelector('input[name="case"]:checked')?.value || "recorded"; }
@@ -36,6 +39,7 @@ function reset({ resetControls = true } = {}) {
   }
   lastResult = null;
   resultPanel.hidden = true;
+  $("resultPlaceholder").hidden = false;
   evidence.hidden = true;
   $("evidenceButton").setAttribute("aria-expanded", "false");
   $("copyVector").disabled = true;
@@ -47,6 +51,7 @@ function reset({ resetControls = true } = {}) {
 function renderResult(result, market) {
   lastResult = result;
   resultPanel.hidden = false;
+  $("resultPlaceholder").hidden = true;
   resultPanel.dataset.verdict = result.verdict;
   text("verdict", result.verdict);
   text("dataKind", result.kind);
@@ -218,6 +223,9 @@ try {
   const problem = validateDemo(data);
   if (problem) throw new Error(problem);
   demo = data;
+  const recordedAt = data.capturedAt.replace("T", " ").replace(/\.\d+Z$/, " UTC");
+  text("placeholderTime", recordedAt);
+  text("sourcePreviewTime", recordedAt);
   marketSelect.replaceChildren();
   for (const [index, market] of data.markets.entries()) {
     const option = document.createElement("option");

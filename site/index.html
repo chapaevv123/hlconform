@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#091312">
+<meta name="theme-color" content="#041313">
 <meta name="description" content="Inspect HIP-3 market identity, asset IDs and collateral against recorded Hyperliquid metadata.">
 <link rel="icon" href="data:,">
 <title>hlconform — Verify HIP-3 market identity</title>
@@ -11,27 +11,29 @@
 <body>
 <a class="skip-link" href="#demo">Skip to demo</a>
 <header class="site-header">
-  <div class="brand" aria-label="hlconform"><span class="brand-mark" aria-hidden="true">h<span>l</span></span><span>hlconform<small>Independent tool for Hyperliquid builders</small></span></div>
+  <div class="brand-cluster"><span class="ecosystem-brand"><img src="./hyperliquid-mark.png" width="40" height="40" alt="" aria-hidden="true"><span>Hyper<em>liquid</em></span></span><span class="brand-divider" aria-hidden="true"></span><div class="brand" aria-label="hlconform"><span class="brand-mark" aria-hidden="true">h<span>l</span></span><span>hlconform<small>Independent tool for Hyperliquid builders</small></span></div></div>
   <nav aria-label="Main navigation"><a href="#demo">DEMO</a><a href="#method">HOW IT WORKS</a><a href="#developers">FOR DEVELOPERS</a></nav>
   <a class="github-link" id="githubLink" href="https://github.com/chapaevv123/hlconform" target="_blank" rel="noopener noreferrer">VIEW ON GITHUB <span aria-hidden="true">↗</span></a>
 </header>
 <main>
 <section class="hero page-grid" id="demo" aria-labelledby="hero-title">
-  <div class="hero-copy"><div class="eyebrow"><span class="signal-dot" aria-hidden="true"></span> OPEN-SOURCE DEVELOPER TOOL <span class="eyebrow-rule"></span> HIP-3</div>
+  <img class="terrain-art" src="./terrain.svg" alt="" aria-hidden="true" loading="eager">
+  <div class="hero-copy"><div class="eyebrow"><span class="signal-dot" aria-hidden="true"></span> OPEN SOURCE <span class="eyebrow-separator">•</span> INDEPENDENT TOOL FOR HYPERLIQUID BUILDERS</div>
     <h1 id="hero-title">Verify HIP-3<br>market identity<br><em>before you ship.</em></h1>
-    <p class="lead">Check HIP-3 asset IDs and collateral against a recorded public snapshot. Catch mismatches early.</p>
-    <div class="benefits"><span>Recorded snapshots</span><span>Catch mismatches</span><span>Built for developers</span></div>
+    <p class="lead">Check HIP-3 asset IDs and collateral against a recorded public snapshot. Catch mismatches early and ship with confidence.</p>
+    <div class="benefits"><span><i aria-hidden="true">◇</i>Recorded<br>snapshot data</span><span><i aria-hidden="true">ϟ</i>Catch mismatches<br>early</span><span><i aria-hidden="true">⌘</i>Built for<br>developers</span></div>
     <button id="heroSourceButton" class="hero-source" type="button">HOW THE EVIDENCE WORKS <span aria-hidden="true">↗</span></button>
     <div class="hero-meta"><span>READ-ONLY CHECKS</span><span>NO WALLET REQUIRED</span></div>
   </div>
   <div class="workbench" aria-label="HIP-3 conformance demo">
-    <div class="bench-top"><span><strong>hlconform</strong><small>HIP-3 IDENTITY CHECKER</small></span><span class="bench-live"><span class="signal-dot" aria-hidden="true"></span> RECORDED SNAPSHOT DATA</span></div>
+    <div class="bench-top"><span class="bench-brand"><span class="brand-mark" aria-hidden="true">h<span>l</span></span><span><strong>hlconform</strong><small>HIP-3 IDENTITY CHECKER</small></span></span><span class="bench-live"><span class="signal-dot" aria-hidden="true"></span> RECORDED SNAPSHOT DATA <span class="info-glyph" title="Historical public API capture">ⓘ</span></span></div>
     <div class="bench-controls"><label for="marketSelect">MARKET</label><select id="marketSelect" aria-describedby="marketHelp"><option>Loading recorded markets…</option></select>
       <p id="marketHelp" class="control-help">Public metadata, captured at a specific time. No live API calls from this page.</p>
       <div class="market-facts" aria-label="Selected market identity"><div><small>DEX / MARKET</small><strong id="previewMarket">—</strong></div><div><small>COLLATERAL</small><strong id="previewCollateral">—</strong></div><div><small>ASSET ID <span class="hip-note">(HIP-3)</span></small><strong id="previewAsset">—</strong></div></div>
       <button id="runButton" class="run-button" type="button"><span>RUN HIP-3 CHECK</span><span aria-hidden="true">↗</span></button>
     </div>
     <div id="demoStatus" class="demo-status" role="status" aria-live="polite">Ready to check a recorded market.</div>
+    <div id="resultPlaceholder" class="result-placeholder" aria-hidden="true"><span class="ready-glyph">✓</span><span><strong>READY TO CHECK</strong><small>Run the check to compare this market with recorded data.</small></span><span class="placeholder-time">RECORDED SNAPSHOT<br><b id="placeholderTime">Loading…</b></span></div>
     <section id="result" class="result" hidden aria-label="Conformance result">
       <div class="result-head"><div><span class="field-label">CONFORMANCE RESULT</span><strong id="verdict">—</strong></div><span id="dataKind" class="data-kind">—</span></div>
       <div class="identity-line" aria-label="DEX coin and asset ID"><span id="resultDex">—</span><span aria-hidden="true">→</span><span id="resultCoin">—</span><span aria-hidden="true">→</span><strong id="resultAsset">—</strong></div>
@@ -40,6 +42,7 @@
       <div class="result-actions"><button id="evidenceButton" type="button" aria-expanded="false" aria-controls="evidence">VIEW EVIDENCE <span aria-hidden="true">＋</span></button><button id="copyResult" type="button">COPY RESULT</button><button id="resetButton" type="button">RESET</button></div>
       <div id="evidence" class="evidence" hidden><p class="field-label">EVIDENCE / SOURCE</p><p id="evidenceNote"></p><dl><dt>File integrity</dt><dd id="integrityStatus">Not checked</dd><dt>Snapshot SHA-256</dt><dd id="evidenceHash"></dd><dt>API endpoint</dt><dd id="evidenceEndpoint"></dd><dt>Formula</dt><dd id="evidenceFormula"></dd></dl><a href="./data/mainnet_snapshot.json" download="hlconform-mainnet-snapshot.json">DOWNLOAD RECORDED SNAPSHOT ↗</a><a href="https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids" target="_blank" rel="noopener noreferrer">OFFICIAL ASSET-ID RULE ↗</a></div>
     </section>
+    <div class="source-preview" aria-label="Recorded source preview"><div class="source-preview-title">RECORDED SNAPSHOT (PUBLIC DATA) <span>⌄</span></div><div class="source-preview-grid"><span>Market</span><strong id="sourcePreviewMarket">—</strong><span>Asset ID (HIP-3)</span><strong id="sourcePreviewAsset">—</strong><span>Collateral</span><strong id="sourcePreviewCollateral">—</strong><span>Recorded at</span><strong id="sourcePreviewTime">—</strong></div><p>Historical capture. Open evidence after running the check to verify the full file.</p></div>
     <fieldset class="case-switch"><legend>EXPLORE TEST CASES</legend>
       <label><input type="radio" name="case" value="recorded" checked><span>Recorded match</span></label>
       <label><input type="radio" name="case" value="invalid"><span>Wrong ID <small>synthetic</small></span></label>
@@ -47,7 +50,7 @@
     </fieldset>
   </div>
 </section>
-<section class="reading-strip" aria-label="What the check covers"><div><small>01 / IDENTITY</small><span>DEX + COIN + INDEX</span></div><div><small>02 / MAPPING</small><span>ASSET ID + COLLATERAL</span></div><div><small>03 / EVIDENCE</small><span>TIMESTAMP + SOURCE HASH</span></div></section>
+<section class="reading-strip" aria-label="Three steps to check a market"><div><small>01</small><span class="step-icon" aria-hidden="true">▤</span><span><strong>Pick a market</strong><em>Choose a recorded HIP-3 market.</em></span></div><div><small>02</small><span class="step-icon" aria-hidden="true">⌕</span><span><strong>Run the check</strong><em>Verify asset ID and collateral.</em></span></div><div><small>03</small><span class="step-icon" aria-hidden="true">▤</span><span><strong>See the result</strong><em>Get a clear verdict with evidence.</em></span></div></section>
 <section class="method page-grid" id="method" aria-labelledby="method-title">
   <div class="section-intro"><span class="eyebrow">METHOD / 02</span><h2 id="method-title">Know what<br><em>changed.</em></h2><p>Compare snapshots without confusing a normal market update with an API contract change. This illustration uses deliberately modified data.</p></div>
   <div class="drift-lab"><div class="section-rule"><span>SNAPSHOT DRIFT</span><span>SYNTHETIC TEST CASE</span></div>
@@ -61,7 +64,7 @@
 python -m hlconform resolve xyz:XYZ100 --snapshot snap.json
 python -m hlconform check --config examples/example.toml --snapshot snap.json --json
 python -m hlconform vectors --snapshot snap.json --out vectors.json
-python -m hlconform diff old.json new.json --json</code></pre><p>Install from the local package before publication. No wallet or API key required.</p></div>
+python -m hlconform diff old.json new.json --json</code></pre><p>Clone the repository to run locally. No wallet or API key required.</p></div>
   <div class="vector-preview"><div class="section-rule"><span>GOLDEN VECTOR / RECORDED</span><span>JSON</span></div><pre id="vectorJson" aria-label="Selected conformance vector">Run the check to inspect a recorded vector.</pre><div class="vector-actions"><button id="copyVector" type="button">COPY JSON</button><button id="downloadVector" type="button">DOWNLOAD EXAMPLE ↗</button></div></div></div>
   <div class="dev-footer"><a id="sourceButton" href="https://github.com/chapaevv123/hlconform" target="_blank" rel="noopener noreferrer">VIEW ON GITHUB ↗</a><p id="sourcePanel">Inspect the CLI, tests, public fixtures and source for this recorded demonstration.</p><span>INDEPENDENT TOOL · NOT AFFILIATED WITH HYPERLIQUID</span></div>
 </div></section>

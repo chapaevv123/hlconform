@@ -20,7 +20,7 @@ const server = http.createServer((req, res) => {
   if (!target.startsWith(resolve(site) + sep)) { res.writeHead(403).end(); return; }
   try {
     const bytes = readFileSync(target);
-    const type = { ".html": "text/html", ".css": "text/css", ".mjs": "text/javascript", ".json": "application/json" }[extname(target)] || "application/octet-stream";
+    const type = { ".html": "text/html", ".css": "text/css", ".mjs": "text/javascript", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png" }[extname(target)] || "application/octet-stream";
     res.writeHead(200, { "Content-Type": type + "; charset=utf-8", "Cache-Control": "no-store" }).end(bytes);
   } catch { res.writeHead(404).end("Not found"); }
 });
@@ -99,9 +99,13 @@ try {
   await command("Page.setDownloadBehavior", { behavior: "allow", downloadPath: qa });
   await command("Page.navigate", { url: baseUrl });
   await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled");
+  if (!(await evaluate("document.querySelector('.terrain-art').complete && document.querySelector('.terrain-art').naturalWidth > 0 && document.querySelector('.ecosystem-brand img').naturalWidth > 0"))) throw new Error("Visual assets failed to load");
   const initial = await evaluate("({title:document.title,button:document.getElementById('runButton').getBoundingClientRect().toJSON(),options:document.getElementById('marketSelect').options.length,width:document.documentElement.scrollWidth})");
   if (initial.options !== 4 || initial.button.bottom > 900 || initial.width > 1440) throw new Error("Desktop first-view failure: " + JSON.stringify(initial));
   await screenshot("desktop_initial.png");
+  await command("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+  if (!(await evaluate("window.matchMedia('(prefers-reduced-motion: reduce)').matches && getComputedStyle(document.documentElement).scrollBehavior === 'auto'"))) throw new Error("Reduced-motion preference was not respected");
+  await command("Emulation.setEmulatedMedia", { features: [] });
   await evaluate("document.getElementById('runButton').click()");
   await until("!document.getElementById('result').hidden && document.getElementById('verdict').textContent === 'VALID'");
   const valid = await evaluate("({verdict:verdict.textContent,asset:resultAsset.textContent,kind:dataKind.textContent,reason:resultReason.textContent})");
@@ -181,7 +185,7 @@ try {
   await delay(450);
   await screenshot("mobile_result.png");
   const report = { base_url: baseUrl, desktop: initial, desktop_1920: wide, recorded: valid, synthetic_invalid: invalid, tablet, mobile,
-    checks: ["1440px desktop first-screen CTA", "recorded VALID", "evidence drawer and full snapshot SHA verification", "copy result and read clipboard", "copy vector and read clipboard", "synthetic INVALID", "synthetic UNKNOWN", "reset", "market switch with USDH collateral", "synthetic schema drift tab", "real GitHub links", "internal navigation targets", "keyboard Enter activates check", "vector download JSON", "1920px desktop first-screen CTA", "tablet no horizontal overflow", "mobile first-screen CTA", "mobile recorded VALID", "no horizontal overflow"],
+    checks: ["1440px desktop first-screen CTA", "visual assets loaded", "reduced motion", "recorded VALID", "evidence drawer and full snapshot SHA verification", "copy result and read clipboard", "copy vector and read clipboard", "synthetic INVALID", "synthetic UNKNOWN", "reset", "market switch with USDH collateral", "synthetic schema drift tab", "real GitHub links", "internal navigation targets", "keyboard Enter activates check", "vector download JSON", "1920px desktop first-screen CTA", "tablet no horizontal overflow", "mobile first-screen CTA", "mobile recorded VALID", "no horizontal overflow"],
     downloaded_vector: downloads[0], console_errors: errors, screenshots: ["desktop_initial.png", "desktop_result.png", "desktop_developers.png", "desktop_drift.png", "desktop_1920.png", "tablet_initial.png", "mobile_initial.png", "mobile_result.png"] };
   const reportName = process.env.HLCONFORM_QA_BASE_URL ? "public_browser_qa.json" : "browser_qa.json";
   writeFileSync(join(qa, reportName), JSON.stringify(report, null, 2));

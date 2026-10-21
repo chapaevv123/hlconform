@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m unittest discover -s tests -q
-      - run: node --test site/tests/site.test.mjs
+      - run: node --test site/tests/site.test.mjs site/tests/live.test.mjs
   deploy:
     needs: verify
     runs-on: ubuntu-latest

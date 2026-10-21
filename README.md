@@ -1,8 +1,8 @@
 # hlconform — HIP-3 Conformance & Drift Kit
 
-`hlconform` is a read-only Python 3.11 CLI for checking Hyperliquid perp market identifiers against a timestamped public metadata snapshot. It exports portable JSON vectors and explains metadata drift. It never places orders, signs transactions, or asks for keys.
+`hlconform` is an independent, read-only HIP-3 configuration checker and Python 3.11 CLI. The browser checks an asset ID or collateral supplied by the user against public Hyperliquid Info API metadata. The CLI uses timestamped snapshots for offline checks, JSON vectors, and drift comparison. Neither component places orders, signs transactions, or asks for keys.
 
-## One-click website demo
+## Browser checker
 
 From this directory, start the static site with one command:
 
@@ -10,7 +10,11 @@ From this directory, start the static site with one command:
 python -m http.server 4173 --directory site
 ```
 
-Open `http://localhost:4173/` and click **RUN HIP-3 CHECK**. The hosted demo is at [GitHub Pages](https://chapaevv123.github.io/hlconform/). No login, wallet, backend, or external service is needed. The default `VALID` example is a historical replay of a recorded public mainnet snapshot. `INVALID`, `UNKNOWN`, and drift examples are clearly marked **SYNTHETIC TEST CASE**. The browser makes no live Hyperliquid API request. The recorded source JSON is available in the evidence drawer; `site/data/demo.json` is regenerated from the verified snapshot and vectors with `python scripts/build_site_data.py`.
+Open `http://localhost:4173/` or the [GitHub Pages checker](https://chapaevv123.github.io/hlconform/). **CHECK YOUR INTEGRATION** makes direct, read-only browser POST requests to the public mainnet or testnet `/info` endpoint. Choose a HIP-3 DEX and market, enter your expected numeric asset ID and/or collateral token name, and click **RUN HIP-3 CHECK**. Missing user expectations produce **MARKET RESOLVED**, never a claim that a user configuration was validated. A mismatch with consistent public metadata produces `INVALID`; incomplete, conflicting, unavailable, or stale evidence produces `UNKNOWN`.
+
+The live checker fetches `perpDexs`, `meta(dex)`, and `spotMeta` twice per check (six POSTs normally, at most 12 with one bounded retry on HTTP 429/5xx) to detect bounded changes between responses. The API does not promise an atomic snapshot. Market lists are cached in the browser for at most 30 seconds and are refreshed explicitly with **REFRESH MARKET LIST**; a fresh check has a 20-second cooldown and an eight-second timeout per request. No automatic polling occurs. All requests go directly to the official public endpoints; there is no proxy, wallet, key, or backend. Browser CORS availability and API schemas can change, so failures return `UNKNOWN`.
+
+**EXPLORE RECORDED DEMO** is separate. Its `VALID` example replays a historical public mainnet snapshot. Wrong ID, stale data, and drift examples are clearly marked **SYNTHETIC TEST CASE**. The recorded source JSON is available in the evidence drawer; `site/data/demo.json` is regenerated from the verified snapshot and vectors with `python scripts/build_site_data.py`.
 
 ## Quick start
 
@@ -29,7 +33,7 @@ node --test site/tests/site.test.mjs
 
 An optional installed entry point is declared in `pyproject.toml`. There are no runtime dependencies outside Python 3.11 stdlib.
 
-`snapshot` is the only networked command. It calls only the official mainnet or testnet `/info` host with `perpDexs`, `spotMeta`, and `meta(dex)`. A snapshot covers all DEXs in a registry with at most 24 entries; a larger or malformed registry fails safely to stay within a conservative request budget. Requests are spaced by at least 1.1 seconds, time out, and retry at most once on 429/transient failures. `resolve`, `check`, `vectors`, and `diff` are offline.
+`snapshot` is the only networked **CLI** command. It calls only the official mainnet or testnet `/info` host with `perpDexs`, `spotMeta`, and `meta(dex)`. A snapshot covers all DEXs in a registry with at most 24 entries; a larger or malformed registry fails safely to stay within a conservative request budget. Requests are spaced by at least 1.1 seconds, time out, and retry at most once on 429/transient failures. `resolve`, `check`, `vectors`, and `diff` are offline. The browser checker is a separate direct live API client and supports larger testnet DEX registries without downloading every DEX's metadata.
 
 ## TOML developer config
 
@@ -44,7 +48,7 @@ collateral_token = 0      # optional spotMeta token index
 
 The market identity is `(network, dex, coin, index in this snapshot)`. `collateral_token` is a mutable DEX attribute, not immutable identity. Native perp IDs equal their native universe indices; builder-deployed HIP-3 perp IDs use `100000 + perp_dex_index * 10000 + index_in_meta`, where `perp_dex_index` is the position in `perpDexs` (including the native `null` at zero). Outcome/HIP-4 assets are unsupported.
 
-Verdicts: `VALID` means the config agrees with official documented formulas and this snapshot at capture time. It does **not** mean an order will be accepted, a market is safe, or metadata will stay unchanged. `INVALID` is a proved contradiction from a consistent, fresh snapshot. `UNKNOWN` covers missing, stale, inconsistent, unsupported, or unavailable evidence. Snapshots older than 24 hours cannot yield a current conformance `VALID`; historical `diff` still works.
+Verdicts: browser `VALID` means at least one user-supplied expected value agrees with the fresh, repeated public metadata reads; CLI `VALID` means the config agrees with the documented formula and its snapshot at capture time. Neither means an order will be accepted, a market is safe, or metadata will stay unchanged. `INVALID` identifies a contradiction against adequate evidence. `UNKNOWN` covers missing, stale, inconsistent, unsupported, or unavailable evidence. With no expected browser input, the result is `MARKET RESOLVED`. Snapshots older than 24 hours cannot yield a current CLI conformance `VALID`; historical `diff` still works.
 
 Snapshots include normalized public market metadata, selected raw universe fields, UTC capture time, official endpoint, a SHA256 content hash, and a consistency result. The capture repeats the registry, spot metadata, and every DEX meta and checks equality. The API does not offer an atomic all-DEX snapshot, so a change between repeated reads can still escape detection. Treat important results as evidence to review, not a trading authorization.
 

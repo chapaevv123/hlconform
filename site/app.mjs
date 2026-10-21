@@ -1,4 +1,5 @@
 import { checkMarket, DRIFT, OFFICIAL_ASSET_IDS, validateDemo, vectorExample } from "./logic.mjs";
+import { LiveClient, checkIntegration, ENDPOINTS } from "./live.mjs";
 
 const $ = (id) => document.getElementById(id);
 const marketSelect = $("marketSelect");
@@ -10,6 +11,10 @@ let lastResult = null;
 let toastTimer = null;
 let integrityCheck = null;
 let integrityVerdict = null;
+const liveClient = new LiveClient();
+let mode = "live";
+let selectionVersion = 0;
+let lastMarket = null;
 
 function text(id, value) { $(id).textContent = String(value); }
 function notice(message, isError = false) {
@@ -22,6 +27,13 @@ function notice(message, isError = false) {
 }
 function currentMarket() { return demo?.markets[Number(marketSelect.value)] || null; }
 function previewMarket() {
+  if (mode === "live") {
+    text("previewMarket", marketSelect.value || "—");
+    text("previewCollateral", "FROM API");
+    text("previewAsset", "FROM API");
+    $("previewAsset").closest(".market-facts").querySelector(".hip-note").textContent = "(HIP-3)";
+    return;
+  }
   const market = currentMarket();
   text("previewMarket", market ? market.coin : "—");
   text("previewCollateral", market ? market.collateralName : "—");
@@ -33,11 +45,13 @@ function previewMarket() {
 }
 function currentCase() { return document.querySelector('input[name="case"]:checked')?.value || "recorded"; }
 function reset({ resetControls = true } = {}) {
-  if (resetControls && demo) {
+  selectionVersion++;
+  if (resetControls && demo && mode === "demo") {
     marketSelect.value = "0";
     document.querySelector('input[name="case"][value="recorded"]').checked = true;
   }
   lastResult = null;
+  lastMarket = null;
   resultPanel.hidden = true;
   $("resultPlaceholder").hidden = false;
   evidence.hidden = true;
@@ -45,11 +59,13 @@ function reset({ resetControls = true } = {}) {
   $("copyVector").disabled = true;
   $("downloadVector").disabled = true;
   text("vectorJson", "Run the check to inspect a recorded vector.");
-  text("demoStatus", demo ? "Ready to check a recorded market." : "Recorded data is unavailable.");
+  text("demoStatus", mode === "live" ? "Ready to check your integration against public metadata." : demo ? "Ready to check a recorded market." : "Recorded data is unavailable.");
+  if (mode === "live" && !marketSelect.disabled) runButton.disabled = false;
 }
 
 function renderResult(result, market) {
   lastResult = result;
+  lastMarket = market;
   resultPanel.hidden = false;
   $("resultPlaceholder").hidden = true;
   resultPanel.dataset.verdict = result.verdict;
@@ -61,8 +77,12 @@ function renderResult(result, market) {
   text("resultExplanation", result.explanation);
   text("resultNetwork", demo.network.toUpperCase());
   text("resultCollateral", market.collateralName + " · token " + market.collateralToken);
-  text("resultReason", result.reasonCode);
+  text("resultReason", result.reasonCode === "NONE" ? "No issues detected" : result.reasonCode);
+  $("comparison").hidden = true;
+  text("timeLabel", "CAPTURED AT UTC");
   text("resultTime", demo.capturedAt.replace("T", " ").replace(/\.\d+Z$/, "Z"));
+  text("resultFreshness","Historical capture");
+  text("resultApiStatus","Offline replay");
   text("evidenceHash", demo.sourceSnapshotHash);
   text("evidenceEndpoint", demo.apiEndpoint);
   text("evidenceFormula", market.dexPosition === 0 ? "Native perp: asset ID = index in meta" : "HIP-3: 100000 + DEX index × 10000 + index in meta");
@@ -77,6 +97,7 @@ function renderResult(result, market) {
 }
 
 function run() {
+  if (mode === "live") { void runLive(); return; }
   if (!demo) { notice("Recorded data has not loaded.", true); return; }
   const market = currentMarket();
   if (!market) { notice("Choose a recorded market.", true); return; }
@@ -91,6 +112,82 @@ function run() {
   }
   renderResult(result, market);
   resultPanel.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth", block: "nearest" });
+}
+
+function setOption(select,value,label) { const option=document.createElement("option");option.value=value;option.textContent=label;select.append(option); }
+function setMode(next) {
+  if (next !== mode) liveClient.clear();
+  mode=next; selectionVersion++; reset({resetControls:false});
+  document.querySelector('.workbench').dataset.mode=next;
+  $("liveMode").classList.toggle("active",next==="live");$("demoMode").classList.toggle("active",next==="demo");
+  $("liveMode").setAttribute("aria-pressed",String(next==="live"));$("demoMode").setAttribute("aria-pressed",String(next==="demo"));
+  $("liveFields").hidden=next!=="live";$("expectationFields").hidden=next!=="live";
+  $("caseSwitch").hidden=next!=="demo";$("sourcePreview").hidden=next!=="demo";
+  $("modeBadge").lastChild.textContent=next==="live"?" LIVE DATA":" RECORDED SNAPSHOT";
+  $("marketHelp").textContent=next==="live"?"Select a market, then enter at least one value from your integration.":"Historical metadata captured at a specific time. Synthetic cases are labeled.";
+  text("placeholderTime",next==="live"?"LIVE DATA":demo?.capturedAt || "RECORDED SNAPSHOT");
+  $("recordedDownload").hidden=next!=="demo";
+  if(next==="demo"){marketSelect.replaceChildren();for(const [i,m] of (demo?.markets||[]).entries())setOption(marketSelect,String(i),m.coin+" · "+m.collateralName);marketSelect.disabled=!demo;runButton.disabled=!demo;previewMarket();text("demoStatus",demo?"Ready · recorded "+demo.network+" snapshot from "+demo.capturedAt.slice(0,10)+".":"Recorded demo unavailable.");}
+  else {marketSelect.replaceChildren();setOption(marketSelect,"","Loading markets…");marketSelect.disabled=true;runButton.disabled=true;previewMarket();void loadDexes();}
+}
+async function loadDexes(){
+  const version=++selectionVersion,network=$("networkSelect").value,dexSelect=$("dexSelect");
+  runButton.disabled=true;marketSelect.disabled=true;dexSelect.disabled=true;
+  text("demoStatus","Loading "+network+" HIP-3 DEXs from public API…");
+  try{const registry=await liveClient.loadDexes(network);if(version!==selectionVersion||mode!=="live")return;
+    dexSelect.replaceChildren();
+    for(const item of registry.slice(1))setOption(dexSelect,item.name,item.name);
+    if(!dexSelect.options.length)throw Error("No HIP-3 DEXs in registry");
+    dexSelect.disabled=false;await loadMarkets();
+  }catch(error){if(version!==selectionVersion||mode!=="live")return;text("demoStatus","Public API unavailable: "+error.message+". Recorded demo remains available.");$("demoStatus").classList.add("error");}
+}
+async function loadMarkets(){
+  const version=++selectionVersion,network=$("networkSelect").value,dex=$("dexSelect").value;
+  runButton.disabled=true;marketSelect.disabled=true;marketSelect.replaceChildren();setOption(marketSelect,"","Loading markets…");
+  if(!dex)return;
+  try{const universe=await liveClient.loadMarkets(network,dex);if(version!==selectionVersion||mode!=="live")return;
+    marketSelect.replaceChildren();
+    for(const item of universe)if(typeof item?.name==="string" && item.name.startsWith(dex+":"))setOption(marketSelect,item.name,item.name+(item.isDelisted?" · delisted":""));
+    if(!marketSelect.options.length)throw Error("No markets in this DEX");
+    marketSelect.disabled=false;runButton.disabled=false;previewMarket();$("demoStatus").classList.remove("error");text("demoStatus","Market list ready. Run a fresh check against public metadata.");
+  }catch(error){if(version!==selectionVersion||mode!=="live")return;text("demoStatus","Unable to load markets: "+error.message);$("demoStatus").classList.add("error");}
+}
+function renderLive(result) {
+  lastResult=result;lastMarket={coin:result.market,dex:result.dex};
+  resultPanel.hidden=false;$("resultPlaceholder").hidden=true;resultPanel.dataset.verdict=result.verdict;
+  text("verdict",result.verdict);text("dataKind",result.kind);
+  text("resultDex",result.dex?.toUpperCase()||"—");text("resultCoin",result.market||"—");text("resultAsset",result.expectedAssetId??"—");
+  text("resultExplanation",result.explanation);text("resultNetwork",result.network?.toUpperCase()||"—");
+  text("resultCollateral",result.expectedCollateral?result.expectedCollateral+" · token "+result.collateralToken:"—");
+  text("resultReason",result.reasonCode==="NONE"?"No issues detected":result.reasonCode);
+  text("resultTime",result.fetchedAt||"Unavailable");text("timeLabel","FETCHED AT UTC");
+  text("resultFreshness",result.fetchedAt?"Fetched for this check":"No fresh response");
+  text("resultApiStatus",result.apiStatus===200?"200 OK":result.apiStatus||"Unavailable");
+  const mismatch=result.reasonCode==="ASSET_ID_MISMATCH"||result.reasonCode==="COLLATERAL_MISMATCH";
+  $("comparison").hidden=!mismatch;
+  if(mismatch){text("providedValue",result.reasonCode==="ASSET_ID_MISMATCH"?result.providedAssetId:result.providedCollateral);text("expectedValue",result.reasonCode==="ASSET_ID_MISMATCH"?result.expectedAssetId:result.expectedCollateral);}
+  text("evidenceHash","Not applicable — direct API response");text("evidenceEndpoint",result.source||"—");
+  text("evidenceFormula","HIP-3: 100000 + DEX index × 10000 + index in meta");
+  text("evidenceNote","Read-only public API responses were fetched twice for bounded consistency checks. The API does not guarantee an atomic snapshot. Metadata consistency is not an order-acceptance guarantee.");
+  text("integrityStatus",result.verdict==="UNKNOWN"?"Insufficient or inconsistent live evidence":"Repeated metadata reads matched");
+  $("recordedDownload").hidden=true;$("copyVector").disabled=true;$("downloadVector").disabled=true;
+  text("vectorJson","Recorded vectors are available in Explore Recorded Demo.");
+  evidence.hidden=true;$("evidenceButton").setAttribute("aria-expanded","false");
+  text("demoStatus",result.verdict+" · "+result.reasonCode+" · "+(result.fetchedAt||"no fetch timestamp"));
+  resultPanel.scrollIntoView({behavior:window.matchMedia("(prefers-reduced-motion: reduce)").matches?"instant":"smooth",block:"nearest"});
+}
+async function runLive(){
+  const version=++selectionVersion,network=$("networkSelect").value,dex=$("dexSelect").value,coin=marketSelect.value;
+  if(!coin){notice("Choose a market.",true);return;}
+  runButton.disabled=true;text("demoStatus","Fetching and cross-checking public metadata…");
+  try{const evidence=await liveClient.capture(network,dex);
+    if(version!==selectionVersion||mode!=="live")return;
+    renderLive(checkIntegration(evidence,{network,dex,coin,providedAssetId:$("expectedAssetId").value,providedCollateral:$("expectedCollateral").value}));
+  }catch(error){if(version!==selectionVersion||mode!=="live")return;
+    renderLive({verdict:"UNKNOWN",reasonCode:error.code||"NETWORK_UNAVAILABLE",explanation:error.message,kind:"LIVE DATA",network,dex,market:coin,
+      apiStatus:error.code==="RATE_LIMITED"?"429":error.code?.startsWith("API_HTTP_")?error.code.slice(9):"Unavailable",
+      source:ENDPOINTS[network],fetchedAt:null,expectedAssetId:null,expectedCollateral:null,providedAssetId:$("expectedAssetId").value,providedCollateral:$("expectedCollateral").value});}
+  finally{if(version===selectionVersion&&mode==="live")runButton.disabled=false;}
 }
 
 async function copyText(value, label) {
@@ -182,21 +279,36 @@ function renderDrift(key) {
 }
 
 runButton.addEventListener("click", run);
+$("liveMode").addEventListener("click",()=>setMode("live"));
+$("demoMode").addEventListener("click",()=>setMode("demo"));
+$("networkSelect").addEventListener("change",()=>{liveClient.clear();reset({resetControls:false});void loadDexes();});
+$("refreshMarkets").addEventListener("click",()=>{liveClient.clear();reset({resetControls:false});void loadDexes();});
+$("dexSelect").addEventListener("change",()=>{reset({resetControls:false});void loadMarkets();});
+$("expectedAssetId").addEventListener("input",()=>reset({resetControls:false}));
+$("expectedCollateral").addEventListener("input",()=>reset({resetControls:false}));
 $("resetButton").addEventListener("click", () => reset());
 marketSelect.addEventListener("change", () => { reset({ resetControls: false }); previewMarket(); });
 document.querySelectorAll('input[name="case"]').forEach((input) => input.addEventListener("change", () => reset({ resetControls: false })));
 $("evidenceButton").addEventListener("click", () => {
   evidence.hidden = !evidence.hidden;
   $("evidenceButton").setAttribute("aria-expanded", String(!evidence.hidden));
-  if (!evidence.hidden) void verifyFullSnapshot();
+  if (!evidence.hidden && mode==="demo") void verifyFullSnapshot();
 });
 $("copyResult").addEventListener("click", () => {
   if (!lastResult) return notice("Run the check first.", true);
+  if(mode==="live"){copyText(JSON.stringify(lastResult,null,2),"Result");return;}
   const market = currentMarket();
   copyText(JSON.stringify({ verdict: lastResult.verdict, reason_code: lastResult.reasonCode,
     market: market.coin, dex: market.dex, asset_id: lastResult.claimedAssetId ?? lastResult.expectedAssetId,
     expected_asset_id: lastResult.expectedAssetId, collateral_token: market.collateralToken,
     source_snapshot: demo.sourceSnapshotHash, captured_at: demo.capturedAt, data_kind: lastResult.kind }, null, 2), "Result");
+});
+$("downloadResult").addEventListener("click",()=>{
+  if(!lastResult)return notice("Run the check first.",true);
+  if(mode==="live"){downloadJson(lastResult,"hlconform-live-result.json");return;}
+  downloadJson({verdict:lastResult.verdict,reason_code:lastResult.reasonCode,market:lastMarket?.coin,dex:lastMarket?.dex,
+    asset_id:lastResult.claimedAssetId??lastResult.expectedAssetId,expected_asset_id:lastResult.expectedAssetId,
+    source_snapshot:demo.sourceSnapshotHash,captured_at:demo.capturedAt,data_kind:lastResult.kind},"hlconform-recorded-result.json");
 });
 $("copyVector").addEventListener("click", () => {
   if (!lastResult) return notice("Run the check first.", true);
@@ -211,6 +323,7 @@ $("heroSourceButton")?.addEventListener("click", () => {
   $("developers").scrollIntoView({ behavior: "smooth" });
   $("sourceButton").focus({ preventScroll: true });
 });
+$("copyCommands").addEventListener("click",()=>copyText(document.querySelector(".quickstart code").textContent,"Commands"));
 renderDrift("collateral");
 runButton.disabled = true;
 marketSelect.disabled = true;
@@ -234,12 +347,11 @@ try {
     marketSelect.append(option);
   }
   previewMarket();
-  runButton.disabled = false;
-  marketSelect.disabled = false;
-  text("demoStatus", "Ready · recorded " + data.network + " snapshot from " + data.capturedAt.slice(0, 10) + ".");
+  if(mode==="demo"){runButton.disabled=false;marketSelect.disabled=false;text("demoStatus","Ready · recorded "+data.network+" snapshot from "+data.capturedAt.slice(0,10)+".");}
 } catch (error) {
   $("demoStatus").classList.add("error");
   text("demoStatus", "Recorded demo data could not load. Start the local HTTP server and refresh. " + error.message);
   marketSelect.replaceChildren();
   const option = document.createElement("option"); option.textContent = "Data unavailable"; marketSelect.append(option);
 }
+setMode("live");

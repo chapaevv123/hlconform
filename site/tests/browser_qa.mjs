@@ -55,7 +55,7 @@ async function until(expression, timeout = 10000) {
     if (await evaluate(expression)) return;
     await delay(120);
   }
-  throw new Error("Page condition timed out: " + expression);
+  throw new Error("Page condition timed out: " + expression + " / " + JSON.stringify(await evaluate("({status:document.getElementById('demoStatus')?.textContent,runDisabled:document.getElementById('runButton')?.disabled,mode:document.getElementById('liveMode')?.getAttribute('aria-pressed')})")) + " / console " + errors.join(", "));
 }
 async function screenshot(filename) {
   const result = await command("Page.captureScreenshot", { format: "png", fromSurface: true });
@@ -94,14 +94,55 @@ try {
   });
   await command("Page.enable");
   await command("Runtime.enable");
+  await command("Network.enable");
   await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await command("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: qa });
   await command("Page.setDownloadBehavior", { behavior: "allow", downloadPath: qa });
   await command("Page.navigate", { url: baseUrl });
-  await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled");
+  await until("document.readyState === 'complete' && document.getElementById('liveMode').getAttribute('aria-pressed') === 'true' && !document.getElementById('runButton').disabled", 20000);
   if (!(await evaluate("document.querySelector('.terrain-art').complete && document.querySelector('.terrain-art').naturalWidth > 0 && document.querySelector('.ecosystem-brand img').naturalWidth > 0"))) throw new Error("Visual assets failed to load");
   const initial = await evaluate("({title:document.title,button:document.getElementById('runButton').getBoundingClientRect().toJSON(),options:document.getElementById('marketSelect').options.length,width:document.documentElement.scrollWidth})");
-  if (initial.options !== 4 || initial.button.bottom > 900 || initial.width > 1440) throw new Error("Desktop first-view failure: " + JSON.stringify(initial));
+  if (initial.options < 1 || initial.button.bottom > 900 || initial.width > 1440) throw new Error("Desktop first-view failure: " + JSON.stringify(initial));
+  await screenshot("desktop_live_initial.png");
+  await evaluate("document.getElementById('dexSelect').value='flx';document.getElementById('dexSelect').dispatchEvent(new Event('change'))");
+  await until("!document.getElementById('runButton').disabled && [...document.getElementById('marketSelect').options].some(o=>o.value==='flx:TSLA')", 20000);
+  await evaluate("document.getElementById('marketSelect').value='flx:TSLA';document.getElementById('marketSelect').dispatchEvent(new Event('change'));document.getElementById('expectedAssetId').value='120007';document.getElementById('expectedAssetId').dispatchEvent(new Event('input'));document.getElementById('runButton').click()");
+  await until("document.getElementById('verdict').textContent === 'INVALID' || document.getElementById('verdict').textContent === 'UNKNOWN'", 25000);
+  const liveInvalid = await evaluate("({verdict:verdict.textContent,reason:resultReason.textContent,provided:providedValue.textContent,expected:expectedValue.textContent,kind:dataKind.textContent,time:resultTime.textContent})");
+  if (liveInvalid.verdict !== 'INVALID' || liveInvalid.reason !== 'ASSET_ID_MISMATCH' || liveInvalid.provided !== '120007' || liveInvalid.expected !== '120000' || liveInvalid.kind !== 'LIVE DATA' || !liveInvalid.time.includes('Z')) throw new Error("Live configuration mismatch failed: " + JSON.stringify(liveInvalid));
+  await screenshot("desktop_live_invalid.png");
+  await command("Browser.grantPermissions", { origin: new URL(baseUrl).origin, permissions: ["clipboardReadWrite"] });
+  await clickAt("copyResult");
+  await until("document.getElementById('toast').textContent.includes('Result copied')");
+  if (JSON.parse(await evaluate("navigator.clipboard.readText()")).providedAssetId !== "120007") throw new Error("Live result clipboard incorrect");
+  await clickAt("downloadResult");
+  const { readdirSync } = await import("node:fs");
+  await until("document.getElementById('toast').textContent.includes('Example downloaded')");
+  let liveFiles=[];
+  for(let attempt=0;attempt<40;attempt++){liveFiles=readdirSync(qa).filter(x=>x==="hlconform-live-result.json");if(liveFiles.length)break;await delay(150);}
+  if(!liveFiles.length||JSON.parse(readFileSync(join(qa,liveFiles[0]),"utf8")).reasonCode!=="ASSET_ID_MISMATCH")throw Error("Live result download incorrect");
+  await evaluate("document.getElementById('expectedAssetId').value='';document.getElementById('expectedAssetId').dispatchEvent(new Event('input'));document.getElementById('expectedCollateral').value='USDC';document.getElementById('expectedCollateral').dispatchEvent(new Event('input'))");
+  await delay(20_500);
+  await evaluate("document.getElementById('runButton').click()");
+  await until("document.getElementById('resultReason').textContent === 'COLLATERAL_MISMATCH'",25000);
+  const liveCollateral=await evaluate("({verdict:verdict.textContent,provided:providedValue.textContent,expected:expectedValue.textContent})");
+  if(liveCollateral.verdict!=="INVALID"||liveCollateral.provided!=="USDC"||liveCollateral.expected!=="USDH")throw Error("Live collateral mismatch incorrect: "+JSON.stringify(liveCollateral));
+  await screenshot("desktop_live_collateral.png");
+  await delay(20_500);
+  await command("Network.emulateNetworkConditions",{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+  await evaluate("document.getElementById('runButton').click()");
+  await until("document.getElementById('verdict').textContent === 'UNKNOWN'",12000);
+  const liveOffline=await evaluate("({verdict:verdict.textContent,reason:resultReason.textContent})");
+  await command("Network.emulateNetworkConditions",{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+  if(liveOffline.reason!=="NETWORK_UNAVAILABLE")throw Error("Offline browser did not return UNKNOWN: "+JSON.stringify(liveOffline));
+  await evaluate("document.getElementById('networkSelect').value='testnet';document.getElementById('networkSelect').dispatchEvent(new Event('change'))");
+  await until("document.getElementById('dexSelect').options.length > 100",20000);
+  await evaluate("document.getElementById('dexSelect').value='felix';document.getElementById('dexSelect').dispatchEvent(new Event('change'))");
+  await until("!document.getElementById('runButton').disabled && document.getElementById('marketSelect').options.length > 0",20000);
+  const testnet = await evaluate("({network:networkSelect.value,dex:dexSelect.value,market:marketSelect.value})");
+  if(testnet.network!=="testnet"||testnet.dex!=="felix"||!testnet.market.startsWith("felix:"))throw Error("Testnet market selection failed: "+JSON.stringify(testnet));
+  await evaluate("document.getElementById('demoMode').click()");
+  await until("document.getElementById('marketSelect').options.length === 4 && !document.getElementById('runButton').disabled");
   await screenshot("desktop_initial.png");
   await command("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
   if (!(await evaluate("window.matchMedia('(prefers-reduced-motion: reduce)').matches && getComputedStyle(document.documentElement).scrollBehavior === 'auto'"))) throw new Error("Reduced-motion preference was not respected");
@@ -115,7 +156,6 @@ try {
   await until("document.getElementById('integrityStatus').textContent.startsWith('VERIFIED')");
   await delay(450);
   await screenshot("desktop_result.png");
-  await command("Browser.grantPermissions", { origin: new URL(baseUrl).origin, permissions: ["clipboardReadWrite"] });
   await clickAt("copyResult");
   await until("document.getElementById('toast').textContent.includes('Result copied')");
   const copiedResult = await evaluate("navigator.clipboard.readText()");
@@ -152,7 +192,6 @@ try {
   await command("Input.dispatchKeyEvent", { type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13 });
   await until("!document.getElementById('result').hidden && !document.getElementById('downloadVector').disabled && document.getElementById('verdict').textContent === 'VALID'");
   await clickAt("downloadVector");
-  const { readdirSync } = await import("node:fs");
   let downloads = [];
   for (let attempt = 0; attempt < 40; attempt++) {
     downloads = readdirSync(qa).filter((name) => name.endsWith("-vector.json"));
@@ -164,29 +203,30 @@ try {
   if (downloaded.expected.asset_id !== 110000) throw new Error("Downloaded vector incorrect");
   await command("Emulation.setDeviceMetricsOverride", { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
   await command("Page.navigate", { url: baseUrl });
-  await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled");
+  await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled", 20000);
   const wide = await evaluate("({width:document.documentElement.scrollWidth,viewport:window.innerWidth,button:document.getElementById('runButton').getBoundingClientRect().toJSON()})");
   if (wide.width > wide.viewport || wide.button.bottom > 1080) throw new Error("1920px desktop failure: " + JSON.stringify(wide));
   await screenshot("desktop_1920.png");
   await command("Emulation.setDeviceMetricsOverride", { width: 820, height: 1180, deviceScaleFactor: 1, mobile: true });
   await command("Page.navigate", { url: baseUrl });
-  await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled");
+  await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled", 20000);
   const tablet = await evaluate("({width:document.documentElement.scrollWidth,viewport:window.innerWidth,button:document.getElementById('runButton').getBoundingClientRect().toJSON()})");
   if (tablet.width > tablet.viewport) throw new Error("Tablet horizontal overflow: " + JSON.stringify(tablet));
   await screenshot("tablet_initial.png");
   await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
   await command("Page.navigate", { url: baseUrl });
-  await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled");
+  await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled", 20000);
   const mobile = await evaluate("({width:document.documentElement.scrollWidth,viewport:window.innerWidth,button:document.getElementById('runButton').getBoundingClientRect().toJSON()})");
   if (mobile.width > mobile.viewport || mobile.button.bottom > 844) throw new Error("Mobile first-view failure: " + JSON.stringify(mobile));
   await screenshot("mobile_initial.png");
+  await evaluate("document.getElementById('demoMode').click()");
   await evaluate("document.getElementById('runButton').click()");
   await until("document.getElementById('verdict').textContent === 'VALID'");
   await delay(450);
   await screenshot("mobile_result.png");
-  const report = { base_url: baseUrl, desktop: initial, desktop_1920: wide, recorded: valid, synthetic_invalid: invalid, tablet, mobile,
-    checks: ["1440px desktop first-screen CTA", "visual assets loaded", "reduced motion", "recorded VALID", "evidence drawer and full snapshot SHA verification", "copy result and read clipboard", "copy vector and read clipboard", "synthetic INVALID", "synthetic UNKNOWN", "reset", "market switch with USDH collateral", "synthetic schema drift tab", "real GitHub links", "internal navigation targets", "keyboard Enter activates check", "vector download JSON", "1920px desktop first-screen CTA", "tablet no horizontal overflow", "mobile first-screen CTA", "mobile recorded VALID", "no horizontal overflow"],
-    downloaded_vector: downloads[0], console_errors: errors, screenshots: ["desktop_initial.png", "desktop_result.png", "desktop_developers.png", "desktop_drift.png", "desktop_1920.png", "tablet_initial.png", "mobile_initial.png", "mobile_result.png"] };
+  const report = { base_url: baseUrl, desktop: initial, desktop_1920: wide, live_invalid: liveInvalid, live_collateral:liveCollateral,live_offline:liveOffline,testnet,recorded: valid, synthetic_invalid: invalid, tablet, mobile,
+    checks: ["1440px desktop first-screen CTA", "real live API mismatch with user asset ID", "real live collateral mismatch", "offline browser UNKNOWN", "testnet HIP-3 market selection", "live result copy/download JSON", "visual assets loaded", "reduced motion", "recorded VALID", "evidence drawer and full snapshot SHA verification", "copy result and read clipboard", "copy vector and read clipboard", "synthetic INVALID", "synthetic UNKNOWN", "reset", "market switch with USDH collateral", "synthetic schema drift tab", "real GitHub links", "internal navigation targets", "keyboard Enter activates check", "vector download JSON", "1920px desktop first-screen CTA", "tablet no horizontal overflow", "mobile first-screen CTA", "mobile recorded VALID", "no horizontal overflow"],
+    downloaded_vector: downloads[0], console_errors: errors, screenshots: ["desktop_live_initial.png","desktop_live_invalid.png","desktop_live_collateral.png","desktop_initial.png", "desktop_result.png", "desktop_developers.png", "desktop_drift.png", "desktop_1920.png", "tablet_initial.png", "mobile_initial.png", "mobile_result.png"] };
   const reportName = process.env.HLCONFORM_QA_BASE_URL ? "public_browser_qa.json" : "browser_qa.json";
   writeFileSync(join(qa, reportName), JSON.stringify(report, null, 2));
   if (errors.length) throw new Error("Browser console errors: " + errors.join(", "));

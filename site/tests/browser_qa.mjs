@@ -26,6 +26,7 @@ const server = http.createServer((req, res) => {
 });
 await new Promise((ok) => server.listen(0, "127.0.0.1", ok));
 const port = server.address().port;
+const baseUrl = process.env.HLCONFORM_QA_BASE_URL || "http://127.0.0.1:" + port + "/";
 const browser = spawn(chromePath, [
   "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
   "--disable-extensions", "--remote-debugging-port=0", "--user-data-dir=" + profile,
@@ -96,7 +97,7 @@ try {
   await command("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
   await command("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: qa });
   await command("Page.setDownloadBehavior", { behavior: "allow", downloadPath: qa });
-  await command("Page.navigate", { url: "http://127.0.0.1:" + port + "/" });
+  await command("Page.navigate", { url: baseUrl });
   await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled");
   const initial = await evaluate("({title:document.title,button:document.getElementById('runButton').getBoundingClientRect().toJSON(),options:document.getElementById('marketSelect').options.length,width:document.documentElement.scrollWidth})");
   if (initial.options !== 4 || initial.button.bottom > 900 || initial.width > 1440) throw new Error("Desktop first-view failure: " + JSON.stringify(initial));
@@ -110,7 +111,7 @@ try {
   await until("document.getElementById('integrityStatus').textContent.startsWith('VERIFIED')");
   await delay(450);
   await screenshot("desktop_result.png");
-  await command("Browser.grantPermissions", { origin: "http://127.0.0.1:" + port, permissions: ["clipboardReadWrite"] });
+  await command("Browser.grantPermissions", { origin: new URL(baseUrl).origin, permissions: ["clipboardReadWrite"] });
   await clickAt("copyResult");
   await until("document.getElementById('toast').textContent.includes('Result copied')");
   const copiedResult = await evaluate("navigator.clipboard.readText()");
@@ -158,19 +159,19 @@ try {
   const downloaded = JSON.parse(readFileSync(join(qa, downloads[0]), "utf8"));
   if (downloaded.expected.asset_id !== 110000) throw new Error("Downloaded vector incorrect");
   await command("Emulation.setDeviceMetricsOverride", { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
-  await command("Page.navigate", { url: "http://127.0.0.1:" + port + "/" });
+  await command("Page.navigate", { url: baseUrl });
   await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled");
   const wide = await evaluate("({width:document.documentElement.scrollWidth,viewport:window.innerWidth,button:document.getElementById('runButton').getBoundingClientRect().toJSON()})");
   if (wide.width > wide.viewport || wide.button.bottom > 1080) throw new Error("1920px desktop failure: " + JSON.stringify(wide));
   await screenshot("desktop_1920.png");
   await command("Emulation.setDeviceMetricsOverride", { width: 820, height: 1180, deviceScaleFactor: 1, mobile: true });
-  await command("Page.navigate", { url: "http://127.0.0.1:" + port + "/" });
+  await command("Page.navigate", { url: baseUrl });
   await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled");
   const tablet = await evaluate("({width:document.documentElement.scrollWidth,viewport:window.innerWidth,button:document.getElementById('runButton').getBoundingClientRect().toJSON()})");
   if (tablet.width > tablet.viewport) throw new Error("Tablet horizontal overflow: " + JSON.stringify(tablet));
   await screenshot("tablet_initial.png");
   await command("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
-  await command("Page.navigate", { url: "http://127.0.0.1:" + port + "/" });
+  await command("Page.navigate", { url: baseUrl });
   await until("document.readyState === 'complete' && !document.getElementById('runButton').disabled");
   const mobile = await evaluate("({width:document.documentElement.scrollWidth,viewport:window.innerWidth,button:document.getElementById('runButton').getBoundingClientRect().toJSON()})");
   if (mobile.width > mobile.viewport || mobile.button.bottom > 844) throw new Error("Mobile first-view failure: " + JSON.stringify(mobile));
@@ -179,12 +180,13 @@ try {
   await until("document.getElementById('verdict').textContent === 'VALID'");
   await delay(450);
   await screenshot("mobile_result.png");
-  const report = { desktop: initial, desktop_1920: wide, recorded: valid, synthetic_invalid: invalid, tablet, mobile,
+  const report = { base_url: baseUrl, desktop: initial, desktop_1920: wide, recorded: valid, synthetic_invalid: invalid, tablet, mobile,
     checks: ["1440px desktop first-screen CTA", "recorded VALID", "evidence drawer and full snapshot SHA verification", "copy result and read clipboard", "copy vector and read clipboard", "synthetic INVALID", "synthetic UNKNOWN", "reset", "market switch with USDH collateral", "synthetic schema drift tab", "real GitHub links", "internal navigation targets", "keyboard Enter activates check", "vector download JSON", "1920px desktop first-screen CTA", "tablet no horizontal overflow", "mobile first-screen CTA", "mobile recorded VALID", "no horizontal overflow"],
     downloaded_vector: downloads[0], console_errors: errors, screenshots: ["desktop_initial.png", "desktop_result.png", "desktop_developers.png", "desktop_drift.png", "desktop_1920.png", "tablet_initial.png", "mobile_initial.png", "mobile_result.png"] };
-  writeFileSync(join(qa, "browser_qa.json"), JSON.stringify(report, null, 2));
+  const reportName = process.env.HLCONFORM_QA_BASE_URL ? "public_browser_qa.json" : "browser_qa.json";
+  writeFileSync(join(qa, reportName), JSON.stringify(report, null, 2));
   if (errors.length) throw new Error("Browser console errors: " + errors.join(", "));
-  console.log(JSON.stringify({ pass: true, report: join(qa, "browser_qa.json"), screenshots: report.screenshots }));
+  console.log(JSON.stringify({ pass: true, report: join(qa, reportName), screenshots: report.screenshots }));
 } finally {
   if (socket) socket.close();
   browser.kill();

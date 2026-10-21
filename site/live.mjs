@@ -5,13 +5,16 @@ export const REQUEST_TIMEOUT_MS = 8_000;
 export class ApiFailure extends Error { constructor(code,message) { super(message); this.code=code; } }
 const integer = x => Number.isSafeInteger(x) && x >= 0;
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
+const registryIdentity = value => Array.isArray(value) ? value.map(item=>item===null?null:item?.name) : null;
+const metaIdentity = value => ({collateralToken:value?.collateralToken??null,markets:Array.isArray(value?.universe)?value.universe.map(item=>item?.name):null});
+const spotIdentity = value => Array.isArray(value?.tokens) ? value.tokens.map(item=>[item?.index,item?.name]).sort((a,b)=>Number(a[0])-Number(b[0])) : null;
 
 export function validateLiveEvidence({network,dex,registry,meta,spot,registryAfter,metaAfter,spotAfter,startedAt,finishedAt}, now=Date.now()) {
   if (!ENDPOINTS[network]) return {ok:false,reasonCode:'NETWORK_MISMATCH',explanation:'The API network does not match the selected network.'};
   if (!integer(startedAt) || !integer(finishedAt) || finishedAt<startedAt || finishedAt-startedAt>20_000 || Math.abs(now-finishedAt)>60_000)
     return {ok:false,reasonCode:'SNAPSHOT_STALE',explanation:'The metadata fetch is too old or took too long.'};
-  if (!same(registry,registryAfter) || !same(meta,metaAfter) || !same(spot,spotAfter))
-    return {ok:false,reasonCode:'SNAPSHOT_INCONSISTENT',explanation:'Public metadata changed between bounded reads.'};
+  if (!same(registryIdentity(registry),registryIdentity(registryAfter)) || !same(metaIdentity(meta),metaIdentity(metaAfter)) || !same(spotIdentity(spot),spotIdentity(spotAfter)))
+    return {ok:false,reasonCode:'SNAPSHOT_INCONSISTENT',explanation:'Market identity or collateral metadata changed between bounded reads.'};
   if (!Array.isArray(registry) || registry[0]!==null || registry.length>1000 || registry.slice(1).some(x=>!x || typeof x.name!=='string') ||
       new Set(registry.slice(1).map(x=>x.name)).size!==registry.length-1)
     return {ok:false,reasonCode:'SCHEMA_INCOMPLETE',explanation:'The DEX registry is missing or malformed.'};

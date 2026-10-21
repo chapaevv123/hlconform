@@ -1,0 +1,153 @@
+{
+  "apiEndpoint": "https://api.hyperliquid.xyz/info",
+  "capturedAt": "2026-10-21T04:10:42.374561Z",
+  "consistencyMethod": "perpDexs and spotMeta before/after; every meta repeated; no atomic guarantee",
+  "consistencyStatus": "CONSISTENT",
+  "kind": "RECORDED_SNAPSHOT_EXCERPT",
+  "markets": [
+    {
+      "assetId": 110000,
+      "coin": "xyz:XYZ100",
+      "collateralName": "USDC",
+      "collateralToken": 0,
+      "dex": "xyz",
+      "dexPosition": 1,
+      "index": 0,
+      "vector": {
+        "evidence_references": [
+          "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids",
+          "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals"
+        ],
+        "expected": {
+          "asset_id": 110000,
+          "captured_at": "2026-10-21T04:10:42.374561Z",
+          "coin": "xyz:XYZ100",
+          "collateral_token": 0,
+          "dex": "xyz",
+          "index": 0,
+          "network": "mainnet",
+          "reason_codes": [],
+          "snapshot_hash": "af4e6b358814553d2edeb9ade9e23774bbafa97f9ec9c15f4a0cc574dc1970a7",
+          "verdict": "VALID"
+        },
+        "formula_version": "hyperliquid.asset-ids.2026-10-21",
+        "input": {
+          "coin": "xyz:XYZ100",
+          "dex": "xyz",
+          "network": "mainnet"
+        },
+        "reason_codes": [],
+        "source_snapshot": "af4e6b358814553d2edeb9ade9e23774bbafa97f9ec9c15f4a0cc574dc1970a7"
+      }
+    },
+    {
+      "assetId": 120000,
+      "coin": "flx:TSLA",
+      "collateralName": "USDH",
+      "collateralToken": 360,
+      "dex": "flx",
+      "dexPosition": 2,
+      "index": 0,
+      "vector": {
+        "evidence_references": [
+          "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids",
+          "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals"
+        ],
+        "expected": {
+          "asset_id": 120000,
+          "captured_at": "2026-10-21T04:10:42.374561Z",
+          "coin": "flx:TSLA",
+          "collateral_token": 360,
+          "dex": "flx",
+          "index": 0,
+          "network": "mainnet",
+          "reason_codes": [],
+          "snapshot_hash": "af4e6b358814553d2edeb9ade9e23774bbafa97f9ec9c15f4a0cc574dc1970a7",
+          "verdict": "VALID"
+        },
+        "formula_version": "hyperliquid.asset-ids.2026-10-21",
+        "input": {
+          "coin": "flx:TSLA",
+          "dex": "flx",
+          "network": "mainnet"
+        },
+        "reason_codes": [],
+        "source_snapshot": "af4e6b358814553d2edeb9ade9e23774bbafa97f9ec9c15f4a0cc574dc1970a7"
+      }
+    },
+    {
+      "assetId": 140000,
+      "coin": "hyna:BTC",
+      "collateralName": "USDE",
+      "collateralToken": 235,
+      "dex": "hyna",
+      "dexPosition": 4,
+      "index": 0,
+      "vector": {
+        "evidence_references": [
+          "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids",
+          "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals"
+        ],
+        "expected": {
+          "asset_id": 140000,
+          "captured_at": "2026-10-21T04:10:42.374561Z",
+          "coin": "hyna:BTC",
+          "collateral_token": 235,
+          "dex": "hyna",
+          "index": 0,
+          "network": "mainnet",
+          "reason_codes": [],
+          "snapshot_hash": "af4e6b358814553d2edeb9ade9e23774bbafa97f9ec9c15f4a0cc574dc1970a7",
+          "verdict": "VALID"
+        },
+        "formula_version": "hyperliquid.asset-ids.2026-10-21",
+        "input": {
+          "coin": "hyna:BTC",
+          "dex": "hyna",
+          "network": "mainnet"
+        },
+        "reason_codes": [],
+        "source_snapshot": "af4e6b358814553d2edeb9ade9e23774bbafa97f9ec9c15f4a0cc574dc1970a7"
+      }
+    },
+    {
+      "assetId": 0,
+      "coin": "BTC",
+      "collateralName": "USDC",
+      "collateralToken": 0,
+      "dex": "native",
+      "dexPosition": 0,
+      "index": 0,
+      "vector": {
+        "evidence_references": [
+          "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/asset-ids",
+          "https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals"
+        ],
+        "expected": {
+          "asset_id": 0,
+          "captured_at": "2026-10-21T04:10:42.374561Z",
+          "coin": "BTC",
+          "collateral_token": 0,
+          "dex": "native",
+          "index": 0,
+          "network": "mainnet",
+          "reason_codes": [],
+          "snapshot_hash": "af4e6b358814553d2edeb9ade9e23774bbafa97f9ec9c15f4a0cc574dc1970a7",
+          "verdict": "VALID"
+        },
+        "formula_version": "hyperliquid.asset-ids.2026-10-21",
+        "input": {
+          "coin": "BTC",
+          "dex": "",
+          "network": "mainnet"
+        },
+        "reason_codes": [],
+        "source_snapshot": "af4e6b358814553d2edeb9ade9e23774bbafa97f9ec9c15f4a0cc574dc1970a7"
+      }
+    }
+  ],
+  "network": "mainnet",
+  "schema": "hlconform.site-demo.v1",
+  "sourceFileSha256": "3e5408ab0fb61316f135073fccbae20b15fa26e632e0c5a742b1802dacc91272",
+  "sourceSnapshotHash": "af4e6b358814553d2edeb9ade9e23774bbafa97f9ec9c15f4a0cc574dc1970a7"
+}

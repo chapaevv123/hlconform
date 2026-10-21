@@ -1,0 +1,6 @@
+[market]
+network = "mainnet"
+dex = "xyz"
+coin = "xyz:XYZ100"
+asset_id = 110000
+collateral_token = 0
